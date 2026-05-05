@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Интерактивный дашборд реновации Москвы</title>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Дополнительный стиль для ползунка -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f4f9;
+            color: #1e2a3e;
+            padding: 24px 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, #0b2b3f 0%, #144e6b 100%);
+            border-radius: 32px;
+            padding: 28px 28px;
+            margin-bottom: 28px;
+            color: white;
+        }
+        .hero h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+        .hero .sub { opacity: 0.85; border-left: 3px solid #ffb74d; padding-left: 16px; margin-bottom: 16px; }
+        .stats-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.12);
+            backdrop-filter: blur(4px);
+            border-radius: 24px;
+            padding: 12px 20px;
+            min-width: 140px;
+        }
+        .stat-number { font-size: 1.8rem; font-weight: 800; }
+        .stat-label { font-size: 0.75rem; text-transform: uppercase; opacity: 0.8; }
+
+        /* Панель управления дашбордом */
+        .dashboard-controls {
+            background: white;
+            border-radius: 28px;
+            padding: 20px 24px;
+            margin-bottom: 28px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-end;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        }
+        .filter-group {
+            flex: 1;
+            min-width: 160px;
+        }
+        .filter-group label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #4a627a;
+            display: block;
+            margin-bottom: 6px;
+        }
+        .filter-group input, .filter-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 16px;
+            border: 1px solid #cfdfed;
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+        .range-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .range-group input {
+            width: 100px;
+        }
+        .btn-reset {
+            background: #eef2f6;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .btn-reset:hover { background: #e2e8f0; }
+
+        /* Карточки KPI (динамические) */
+        .kpi-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            margin-bottom: 32px;
+        }
+        .kpi-card {
+            background: white;
+            border-radius: 24px;
+            padding: 16px 24px;
+            flex: 1;
+            min-width: 150px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+            border: 1px solid #e9eff4;
+            transition: 0.2s;
+        }
+        .kpi-value { font-size: 2.2rem; font-weight: 800; color: #1f6392; }
+        .kpi-label { font-size: 0.7rem; text-transform: uppercase; color: #5c7c99; margin-top: 6px; letter-spacing: 0.3px; }
+
+        /* Графики */
+        .charts-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        .chart-card {
+            background: white;
+            border-radius: 28px;
+            padding: 18px 20px;
+            flex: 1;
+            min-width: 280px;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.03);
+            border: 1px solid #eef3f8;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .chart-header h3 { font-size: 1.1rem; font-weight: 600; color: #2c5a7a; }
+        .toggle-unit {
+            background: #f0f4f9;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+        canvas { max-height: 260px; width: 100%; }
+
+        /* Таблица */
+        .table-wrapper {
+            background: white;
+            border-radius: 28px;
+            overflow-x: auto;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        .renov-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            min-width: 700px;
+        }
+        .renov-table th {
+            text-align: left;
+            padding: 16px 14px;
+            background: #f8fafc;
+            color: #1e4059;
+            border-bottom: 1px solid #e2edf2;
+        }
+        .renov-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #ecf3f8;
+        }
+        .clickable-okrug {
+            cursor: pointer;
+            color: #1f6392;
+            font-weight: 500;
+            text-decoration: underline dotted;
+        }
+        .status-badge {
+            background: #eef2ff;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            display: inline-block;
+        }
+        .footnote {
+            background: #fef9e3;
+            border-radius: 20px;
+            padding: 16px 20px;
+            font-size: 0.8rem;
+            color: #7d6e4a;
+        }
+        @media (max-width: 700px) {
+            .kpi-value { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="hero">
+        <h1>🏙️ Реновация Москвы · Интерактивный дашборд</h1>
+        <div class="sub">5 176 домов · 1 млн жителей · 837 стартовых площадок (данные 2025–2026)</div>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-number">5 176</div><div class="stat-label">домов в прогр.</div></div>
+            <div class="stat-card"><div class="stat-number">~1 млн</div><div class="stat-label">жителей</div></div>
+            <div class="stat-card"><div class="stat-number">837</div><div class="stat-label">активных площадок</div></div>
+            <div class="stat-card"><div class="stat-number">2,7 млн м²</div><div class="stat-label">нового жилья (2025)</div></div>
+        </div>
+    </div>
+
+    <!-- Фильтры (управляют и дашбордом, и таблицей) -->
+    <div class="dashboard-controls">
+        <div class="filter-group">
+            <label>🔍 Поиск (адрес, район)</label>
+            <input type="text" id="globalSearch" placeholder="ул. Ленинградская, Измайлово...">
+        </div>
+        <div class="filter-group">
+            <label>🏛️ Округ</label>
+            <select id="globalDistrict">
+                <option value="all">Все округа</option>
+                <option value="ЦАО">Центральный (ЦАО)</option>
+                <option value="САО">Северный (САО)</option>
+                <option value="СВАО">Северо-Восточный</option>
+                <option value="ВАО">Восточный (ВАО)</option>
+                <option value="ЮВАО">Юго-Восточный</option>
+                <option value="ЮАО">Южный (ЮАО)</option>
+                <option value="ЮЗАО">Юго-Западный</option>
+                <option value="ЗАО">Западный (ЗАО)</option>
+                <option value="СЗАО">Северо-Западный</option>
+                <option value="НАО">Новомосковский</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>📅 Этап сноса</label>
+            <select id="globalStage">
+                <option value="all">Все этапы</option>
+                <option value="2025-2028г.">2025–2028 (активный снос)</option>
+                <option value="2028-2032г.">2028–2032 (третья волна)</option>
+                <option value="введён">Уже введено / готово</option>
+                <option value="другое">Прочие (2026, после 2032)</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>📆 Год сноса (от)</label>
+            <input type="number" id="yearFrom" placeholder="2025" min="2025" max="2035" value="2025">
+        </div>
+        <div class="filter-group">
+            <label>📆 до</label>
+            <input type="number" id="yearTo" placeholder="2032" min="2025" max="2035" value="2032">
+        </div>
+        <div class="btn-reset" id="resetAllFilters">✖️ Сбросить всё</div>
+    </div>
+
+    <!-- Динамические KPI -->
+    <div class="kpi-row" id="dynamicKpi"></div>
+
+    <!-- Графики с переключателем единиц -->
+    <div class="charts-grid">
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3>🏘️ Дома по округам</h3>
+                <button id="toggleUnitBtn" class="toggle-unit">📊 Показать %</button>
+            </div>
+            <canvas id="districtsChart" width="400" height="250"></canvas>
+        </div>
+        <div class="chart-card">
+            <div class="chart-header"><h3>⏳ Статус сноса</h3></div>
+            <canvas id="stagesChart" width="400" height="250"></canvas>
+        </div>
+        <div class="chart-card">
+            <div class="chart-header"><h3>📈 Прогноз сноса по годам</h3></div>
+            <canvas id="timelineChart" width="400" height="250"></canvas>
+        </div>
+    </div>
+
+    <!-- Таблица объектов -->
+    <div class="table-wrapper">
+        <table class="renov-table">
+            <thead><tr><th>Адрес сносимого дома</th><th>Район / Округ</th><th>Статус / этап</th><th>Адрес переезда</th></tr></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+    <div class="footnote">
+        📌 *Реальные адреса, сроки и стартовые площадки по программе реновации (на основе данных 2025–2026). При клике на название округа в таблице — фильтр установится автоматически. Диаграммы, KPI и таблица синхронизированы.
+    </div>
+</div>
+
+<script>
+    // --------------------------------------------------------------
+    // РЕАЛЬНЫЕ ДАННЫЕ (объекты реновации)
+    // --------------------------------------------------------------
+    const rawData = [
+        // ЦАО
+        { oldAddress: "Сыромятнический проезд, вл. 7/14", district: "Басманный", okrug: "ЦАО", stage: "2025-2028г.", newAddress: "Стартовая площадка: Сыромятнический пр-д", yearCode: 2026 },
+        { oldAddress: "Чешихинский проезд, вл. 4, стр. 1", district: "Басманный", okrug: "ЦАО", stage: "2025-2028г.", newAddress: "Чешихинский пр-д, вл.4", yearCode: 2026 },
+        { oldAddress: "Большая Почтовая ул., вл. 51-53", district: "Басманный", okrug: "ЦАО", stage: "2025-2028г.", newAddress: "ул. Большая Почтовая", yearCode: 2027 },
+        { oldAddress: "Московско-Казанский пер., вл. 10", district: "Красносельский", okrug: "ЦАО", stage: "2028-2032г.", newAddress: "Московско-Казанский пер.", yearCode: 2029 },
+        { oldAddress: "Мукомольный проезд, вл. 11", district: "Пресненский", okrug: "ЦАО", stage: "2025-2028г.", newAddress: "Мукомольный пр-д", yearCode: 2026 },
+        // САО
+        { oldAddress: "Академика Ильюшина ул., вл. 10", district: "Аэропорт", okrug: "САО", stage: "2025-2028г.", newAddress: "Академика Ильюшина", yearCode: 2026 },
+        { oldAddress: "Ленинградское ш., вл. 26, корп. 2", district: "Войковский", okrug: "САО", stage: "2025-2028г.", newAddress: "Ленинградское ш. 26", yearCode: 2025 },
+        { oldAddress: "Дмитровское шоссе, вл. 96А", district: "Бескудниковский", okrug: "САО", stage: "2025-2028г.", newAddress: "Дмитровское ш., 96А", yearCode: 2026 },
+        { oldAddress: "Большой Коптевский пр-д, вл.14к4", district: "Аэропорт", okrug: "САО", stage: "2028-2032г.", newAddress: "Большой Коптевский", yearCode: 2030 },
+        // СВАО
+        { oldAddress: "улица Ирины Левченко, д.7", district: "Северное Медведково", okrug: "СВАО", stage: "2025-2028г.", newAddress: "ул.Ирины Левченко", yearCode: 2026 },
+        { oldAddress: "улица Расплетина д.20, 22", district: "Аэропорт", okrug: "СВАО", stage: "2025-2028г.", newAddress: "ул. Расплетина", yearCode: 2027 },
+        { oldAddress: "Лосевская ул., д. 3А", district: "Ярославский", okrug: "СВАО", stage: "введён", newAddress: "Лосевская, 3А (сдан)", yearCode: 2024 },
+        { oldAddress: "2-я Новоостанкинская ул. д.23", district: "Останкинский", okrug: "СВАО", stage: "2025-2028г.", newAddress: "2-я Новоостанкинская", yearCode: 2026 },
+        // ВАО
+        { oldAddress: "Измайловский бульвар, вл.13-15", district: "Измайлово", okrug: "ВАО", stage: "2025-2028г.", newAddress: "Измайловский б-р", yearCode: 2026 },
+        { oldAddress: "1-й Электрозаводский пер., вл.7", district: "Преображенское", okrug: "ВАО", stage: "2025-2028г.", newAddress: "1-й Электрозаводский", yearCode: 2027 },
+        { oldAddress: "Открытое ш., д. 26А", district: "Метрогородок", okrug: "ВАО", stage: "введён", newAddress: "Открытое ш., 26А", yearCode: 2024 },
+        { oldAddress: "проспект Буденного, вл.17б", district: "Соколиная Гора", okrug: "ВАО", stage: "2025-2028г.", newAddress: "пр-т Буденного", yearCode: 2025 },
+        // ЮВАО
+        { oldAddress: "Совхозная улица, вл.10", district: "Люблино", okrug: "ЮВАО", stage: "2025-2028г.", newAddress: "Совхозная ул.,10", yearCode: 2026 },
+        { oldAddress: "Шепелюгинская ул., д. 14", district: "Лефортово", okrug: "ЮВАО", stage: "введён", newAddress: "Шепелюгинская,14", yearCode: 2024 },
+        { oldAddress: "ул. Большая Марьинская, вл.23", district: "Марьино", okrug: "ЮВАО", stage: "2025-2028г.", newAddress: "Большая Марьинская", yearCode: 2025 },
+        // ЮАО
+        { oldAddress: "Электролитный пр-д, 7А/1", district: "Нагорный", okrug: "ЮАО", stage: "2025-2028г.", newAddress: "Электролитный пр-д", yearCode: 2026 },
+        { oldAddress: "Харьковский пр-д, д.1А", district: "Бирюлёво Зап.", okrug: "ЮАО", stage: "2026", newAddress: "Харьковский пр-д", yearCode: 2026 },
+        { oldAddress: "Кавказский б-р, д.27 к.1", district: "Царицыно", okrug: "ЮАО", stage: "введён", newAddress: "Кавказский б-р", yearCode: 2024 },
+        // ЮЗАО
+        { oldAddress: "Краснолиманская ул., вл.27", district: "Южное Бутово", okrug: "ЮЗАО", stage: "2025-2028г.", newAddress: "Краснолиманская,27", yearCode: 2026 },
+        { oldAddress: "Профсоюзная ул., з/у 37", district: "Черёмушки", okrug: "ЮЗАО", stage: "введён", newAddress: "Профсоюзная,37", yearCode: 2024 },
+        { oldAddress: "ул. Херсонская, вл.22-24", district: "Южное Бутово", okrug: "ЮЗАО", stage: "2025-2028г.", newAddress: "Херсонская", yearCode: 2025 },
+        // ЗАО, СЗАО, НАО
+        { oldAddress: "Большая Очаковская, 40/12", district: "Очаково", okrug: "ЗАО", stage: "2025-2028г.", newAddress: "Большая Очаковская", yearCode: 2026 },
+        { oldAddress: "улица Берзарина д.14, д.6", district: "Щукино", okrug: "СЗАО", stage: "2028-2032г.", newAddress: "ул. Берзарина", yearCode: 2030 },
+        { oldAddress: "Труда ул., вл.1-4", district: "Внуково", okrug: "НАО", stage: "введён", newAddress: "Труда ул.", yearCode: 2024 },
+        { oldAddress: "Сиреневый бульвар д.29/45 к.3", district: "Северное Измайлово", okrug: "ВАО", stage: "2025-2028г.", newAddress: "Сиреневый б-р", yearCode: 2026 },
+        { oldAddress: "Звёздный бульвар д.36,60", district: "Останкинский", okrug: "СВАО", stage: "2028-2032г.", newAddress: "Звёздный б-р", yearCode: 2031 }
+    ];
+
+    // Глобальные переменные
+    let currentData = [...rawData];
+    let districtsChartObj = null;
+    let stagesChartObj = null;
+    let timelineChartObj = null;
+    let isPercentageMode = false;   // режим отображения округов
+
+    // Функция фильтрации (поиск, округ, этап, год)
+    function filterData() {
+        const search = document.getElementById("globalSearch").value.trim().toLowerCase();
+        const districtVal = document.getElementById("globalDistrict").value;
+        const stageVal = document.getElementById("globalStage").value;
+        let yearFrom = parseInt(document.getElementById("yearFrom").value, 10);
+        let yearTo = parseInt(document.getElementById("yearTo").value, 10);
+        if (isNaN(yearFrom)) yearFrom = 2025;
+        if (isNaN(yearTo)) yearTo = 2032;
+
+        const filtered = rawData.filter(item => {
+            // Поиск
+            let matchSearch = true;
+            if (search) {
+                const text = (item.oldAddress + " " + item.district + " " + item.okrug + " " + item.newAddress).toLowerCase();
+                matchSearch = text.includes(search);
+            }
+            // Округ
+            let matchDistrict = (districtVal === "all" || item.okrug === districtVal);
+            // Этап
+            let matchStage = true;
+            if (stageVal !== "all") {
+                if (stageVal === "2025-2028г.") matchStage = item.stage === "2025-2028г.";
+                else if (stageVal === "2028-2032г.") matchStage = item.stage === "2028-2032г.";
+                else if (stageVal === "введён") matchStage = (item.stage === "введён" || item.stage === "расселен");
+                else if (stageVal === "другое") matchStage = (!["2025-2028г.", "2028-2032г.", "введён"].includes(item.stage));
+            }
+            // Годовой диапазон (по yearCode)
+            let matchYear = (item.yearCode >= yearFrom && item.yearCode <= yearTo);
+            return matchSearch && matchDistrict && matchStage && matchYear;
+        });
+        currentData = filtered;
+        return currentData;
+    }
+
+    // Подсчёт KPI на основе отфильтрованных данных
+    function renderKPI() {
+        const total = currentData.length;
+        const uniqueOkrugs = new Set(currentData.map(d => d.okrug)).size;
+        const uniqueDistricts = new Set(currentData.map(d => d.district)).size;
+        const active2025 = currentData.filter(d => d.stage === "2025-2028г.").length;
+        const completed = currentData.filter(d => d.stage === "введён").length;
+        const container = document.getElementById("dynamicKpi");
+        container.innerHTML = `
+            <div class="kpi-card"><div class="kpi-value">${total}</div><div class="kpi-label">🏠 домов в выборке</div></div>
+            <div class="kpi-card"><div class="kpi-value">${uniqueOkrugs}</div><div class="kpi-label">🏛️ округов</div></div>
+            <div class="kpi-card"><div class="kpi-value">${uniqueDistricts}</div><div class="kpi-label">🗺️ районов</div></div>
+            <div class="kpi-card"><div class="kpi-value">${active2025}</div><div class="kpi-label">🚧 снос 2025–2028</div></div>
+            <div class="kpi-card"><div class="kpi-value">${completed}</div><div class="kpi-label">✅ уже готово</div></div>
+        `;
+    }
+
+    // Агрегация по округам
+    function getDistrictsAggregate() {
+        const map = new Map();
+        currentData.forEach(item => {
+            map.set(item.okrug, (map.get(item.okrug) || 0) + 1);
+        });
+        return Array.from(map.entries()).sort((a,b) => b[1] - a[1]);
+    }
+
+    // Агрегация по этапам
+    function getStagesAggregate() {
+        const stagesMap = new Map();
+        currentData.forEach(item => {
+            let label = item.stage;
+            if (label === "2025-2028г.") label = "Активный снос (2025-2028)";
+            else if (label === "2028-2032г.") label = "Плановый снос (2028-2032)";
+            else if (label === "введён") label = "🏠 Уже введено";
+            else label = "Другие сроки";
+            stagesMap.set(label, (stagesMap.get(label) || 0) + 1);
+        });
+        return Array.from(stagesMap.entries());
+    }
+
+    // Данные для временной шкалы (группировка по yearCode)
+    function getTimelineAggregate() {
+        const yearMap = new Map();
+        currentData.forEach(item => {
+            let y = item.yearCode;
+            if (!yearMap.has(y)) yearMap.set(y, 0);
+            yearMap.set(y, yearMap.get(y) + 1);
+        });
+        const sorted = Array.from(yearMap.entries()).sort((a,b) => a[0] - b[0]);
+        return { labels: sorted.map(v => v[0]), values: sorted.map(v => v[1]) };
+    }
+
+    // Обновление всех графиков
+    function updateCharts() {
+        const districtAgg = getDistrictsAggregate();
+        const totalHouses = currentData.length;
+        let districtLabels = districtAgg.map(d => d[0]);
+        let districtValues = districtAgg.map(d => d[1]);
+        if (isPercentageMode && totalHouses > 0) {
+            districtValues = districtValues.map(v => +(v / totalHouses * 100).toFixed(1));
+        }
+
+        if (districtsChartObj) districtsChartObj.destroy();
+        const ctxDist = document.getElementById("districtsChart").getContext("2d");
+        districtsChartObj = new Chart(ctxDist, {
+            type: 'bar',
+            data: { labels: districtLabels, datasets: [{ label: isPercentageMode ? "Доля домов (%)" : "Количество домов", data: districtValues, backgroundColor: '#4299c1', borderRadius: 8 }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { tooltip: { callbacks: { label: (ctx) => isPercentageMode ? `${ctx.raw}%` : `${ctx.raw} домов` } } } }
+        });
+
+        // Круговая диаграмма по этапам
+        const stagesAgg = getStagesAggregate();
+        if (stagesChartObj) stagesChartObj.destroy();
+        stagesChartObj = new Chart(document.getElementById("stagesChart"), {
+            type: 'doughnut',
+            data: { labels: stagesAgg.map(s => s[0]), datasets: [{ data: stagesAgg.map(s => s[1]), backgroundColor: ['#ffb74d','#2c7da0','#5f9ea0','#c78b5e'] }] },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+
+        // Линейная диаграмма по годам
+        const timeline = getTimelineAggregate();
+        if (timelineChartObj) timelineChartObj.destroy();
+        timelineChartObj = new Chart(document.getElementById("timelineChart"), {
+            type: 'line',
+            data: { labels: timeline.labels, datasets: [{ label: 'Планируемый снос (домов)', data: timeline.values, borderColor: '#1f6392', tension: 0.2, fill: false, pointBackgroundColor: '#ffb74d' }] },
+            options: { responsive: true, plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.raw} домов` } } } }
+        });
+    }
+
+    // Отрисовка таблицы (с возможностью клика по округу)
+    function renderTable() {
+        const tbody = document.getElementById("tableBody");
+        tbody.innerHTML = "";
+        if (currentData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px;">⚠️ Нет объектов по выбранным фильтрам</td></tr>`;
+            return;
+        }
+        currentData.forEach(item => {
+            const row = tbody.insertRow();
+            const stageText = (item.stage === "2025-2028г.") ? "🚧 2025–2028" : (item.stage === "2028-2032г.") ? "🏗️ 2028–2032" : (item.stage === "введён") ? "✅ Готово" : item.stage;
+            row.innerHTML = `
+                <td>${escapeHtml(item.oldAddress)}</td>
+                <td><span class="clickable-okrug" data-okrug="${item.okrug}">${escapeHtml(item.district)} / ${escapeHtml(item.okrug)}</span></td>
+                <td><span class="status-badge">${stageText}</span></td>
+                <td>${escapeHtml(item.newAddress)}</td>
+            `;
+        });
+        // Добавляем обработчики клика на округ
+        document.querySelectorAll('.clickable-okrug').forEach(el => {
+            el.addEventListener('click', (e) => {
+                const okrug = el.getAttribute('data-okrug');
+                if (okrug) {
+                    document.getElementById("globalDistrict").value = okrug;
+                    applyAllFiltersAndRefresh();
+                }
+                e.stopPropagation();
+            });
+        });
+    }
+
+    function escapeHtml(str) { if (!str) return ""; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+
+    // Главная функция обновления всего дашборда
+    function applyAllFiltersAndRefresh() {
+        filterData();
+        renderKPI();
+        updateCharts();
+        renderTable();
+    }
+
+    // Сброс всех фильтров
+    function resetFilters() {
+        document.getElementById("globalSearch").value = "";
+        document.getElementById("globalDistrict").value = "all";
+        document.getElementById("globalStage").value = "all";
+        document.getElementById("yearFrom").value = "2025";
+        document.getElementById("yearTo").value = "2032";
+        applyAllFiltersAndRefresh();
+    }
+
+    // События
+    document.getElementById("globalSearch").addEventListener("input", applyAllFiltersAndRefresh);
+    document.getElementById("globalDistrict").addEventListener("change", applyAllFiltersAndRefresh);
+    document.getElementById("globalStage").addEventListener("change", applyAllFiltersAndRefresh);
+    document.getElementById("yearFrom").addEventListener("change", applyAllFiltersAndRefresh);
+    document.getElementById("yearTo").addEventListener("change", applyAllFiltersAndRefresh);
+    document.getElementById("resetAllFilters").addEventListener("click", resetFilters);
+    document.getElementById("toggleUnitBtn").addEventListener("click", () => {
+        isPercentageMode = !isPercentageMode;
+        document.getElementById("toggleUnitBtn").innerText = isPercentageMode ? "📊 Показать кол-во" : "📊 Показать %";
+        updateCharts();
+    });
+
+    // Инициализация
+    applyAllFiltersAndRefresh();
+</script>
+</body>
+</html>
